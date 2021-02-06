@@ -1,17 +1,29 @@
+import torch
 # optimizer
 from torch.optim import SGD, Adam
-from .optimizers import *
+import torch_optimizer as optim
 # scheduler
 from torch.optim.lr_scheduler import CosineAnnealingLR, MultiStepLR
 from .warmup_scheduler import GradualWarmupScheduler
 
 from .visualization import *
 
+def get_parameters(models):
+    """Get all model parameters recursively."""
+    parameters = []
+    if isinstance(models, list):
+        for model in models:
+            parameters += get_parameters(model)
+    elif isinstance(models, dict):
+        for model in models.values():
+            parameters += get_parameters(model)
+    else: # models is actually a single pytorch model
+        parameters += list(models.parameters())
+    return parameters
+
 def get_optimizer(hparams, models):
     eps = 1e-8
-    parameters = []
-    for model in models:
-        parameters += list(model.parameters())
+    parameters = get_parameters(models)
     if hparams.optimizer == 'sgd':
         optimizer = SGD(parameters, lr=hparams.lr, 
                         momentum=hparams.momentum, weight_decay=hparams.weight_decay)
@@ -19,11 +31,11 @@ def get_optimizer(hparams, models):
         optimizer = Adam(parameters, lr=hparams.lr, eps=eps, 
                          weight_decay=hparams.weight_decay)
     elif hparams.optimizer == 'radam':
-        optimizer = RAdam(parameters, lr=hparams.lr, eps=eps, 
-                          weight_decay=hparams.weight_decay)
+        optimizer = optim.RAdam(parameters, lr=hparams.lr, eps=eps, 
+                                weight_decay=hparams.weight_decay)
     elif hparams.optimizer == 'ranger':
-        optimizer = Ranger(parameters, lr=hparams.lr, eps=eps, 
-                          weight_decay=hparams.weight_decay)
+        optimizer = optim.Ranger(parameters, lr=hparams.lr, eps=eps, 
+                                 weight_decay=hparams.weight_decay)
     else:
         raise ValueError('optimizer not recognized!')
 
@@ -70,6 +82,8 @@ def extract_model_state_dict(ckpt_path, model_name='model', prefixes_to_ignore=[
     return checkpoint_
 
 def load_ckpt(model, ckpt_path, model_name='model', prefixes_to_ignore=[]):
+    if not ckpt_path:
+        return
     model_dict = model.state_dict()
     checkpoint_ = extract_model_state_dict(ckpt_path, model_name, prefixes_to_ignore)
     model_dict.update(checkpoint_)

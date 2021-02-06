@@ -77,7 +77,7 @@ def center_poses(poses):
     poses_centered = np.linalg.inv(pose_avg_homo) @ poses_homo # (N_images, 4, 4)
     poses_centered = poses_centered[:, :3] # (N_images, 3, 4)
 
-    return poses_centered, np.linalg.inv(pose_avg_homo)
+    return poses_centered, pose_avg
 
 
 def create_spiral_poses(radii, focus_depth, n_poses=120):
@@ -187,8 +187,8 @@ class LLFFDataset(Dataset):
 
         # Step 1: rescale focal length according to training resolution
         H, W, self.focal = poses[0, :, -1] # original intrinsics, same for all images
-        assert H*self.img_wh[0] == W*self.img_wh[1], \
-            f'You must set @img_wh to have the same aspect ratio as ({W}, {H}) !'
+        # assert H*self.img_wh[0] == W*self.img_wh[1], \
+        #     f'You must set @img_wh to have the same aspect ratio as ({W}, {H}) !'
         
         self.focal *= self.img_wh[0]/W
 
@@ -254,8 +254,7 @@ class LLFFDataset(Dataset):
         
         elif self.split == 'val':
             print('val image is', self.image_paths[val_idx])
-            self.c2w_val = self.poses[val_idx]
-            self.image_path_val = self.image_paths[val_idx]
+            self.val_idx = val_idx
 
         else: # for testing, create a parametric rendering path
             if self.split.endswith('train'): # test on training set
@@ -278,6 +277,8 @@ class LLFFDataset(Dataset):
             return len(self.all_rays)
         if self.split == 'val':
             return self.val_num
+        if self.split == 'test_train':
+            return len(self.poses)
         return len(self.poses_test)
 
     def __getitem__(self, idx):
@@ -287,7 +288,9 @@ class LLFFDataset(Dataset):
 
         else:
             if self.split == 'val':
-                c2w = torch.FloatTensor(self.c2w_val)
+                c2w = torch.FloatTensor(self.poses[self.val_idx])
+            elif self.split == 'test_train':
+                c2w = torch.FloatTensor(self.poses[idx])
             else:
                 c2w = torch.FloatTensor(self.poses_test[idx])
 
@@ -308,8 +311,10 @@ class LLFFDataset(Dataset):
             sample = {'rays': rays,
                       'c2w': c2w}
 
-            if self.split == 'val':
-                img = Image.open(self.image_path_val).convert('RGB')
+            if self.split in ['val', 'test_train']:
+                if self.split == 'val':
+                    idx = self.val_idx
+                img = Image.open(self.image_paths[idx]).convert('RGB')
                 img = img.resize(self.img_wh, Image.LANCZOS)
                 img = self.transform(img) # (3, h, w)
                 img = img.view(3, -1).permute(1, 0) # (h*w, 3)
