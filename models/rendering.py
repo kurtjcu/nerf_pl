@@ -202,23 +202,11 @@ def render_rays(models,
                              N_importance, det=(perturb==0))
                   # detach so that grad doesn't propogate to weights_coarse from here
 
-<<<<<<< HEAD
-        z_vals, _ = torch.sort(torch.cat([z_vals, z_vals_], -1), -1)
-
-        xyz_fine_sampled = rays_o.unsqueeze(1) + \
-                           rays_d.unsqueeze(1) * z_vals.unsqueeze(2)
-                           # (N_rays, N_samples+N_importance, 3)
-=======
         z_vals = torch.sort(torch.cat([z_vals, z_vals_], -1), -1)[0]
                  # combine coarse and fine samples
->>>>>>> upstream/dev
 
         xyz_fine = rays_o + rays_d * rearrange(z_vals, 'n1 n2 -> n1 n2 1')
 
         inference(results, models['fine'], 'fine', xyz_fine, z_vals, test_time, **kwargs)
 
-<<<<<<< HEAD
-    return result
-=======
     return results
->>>>>>> upstream/dev
